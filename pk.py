@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -6,6 +7,11 @@ def read_raw_data_team_member():
     # read team member data
     df_team_member = pd.read_csv("team_member_data.csv")
     print(f"Team Member - Total Records: {len(df_team_member)}")
+
+    # create new columns - daily capacity & daily billable capacity
+    # from the existing columns - # weekly capacity & weekly billable capacity
+    df_team_member["Daily Capacity"] = df_team_member["Weekly Capacity"] / 5
+    df_team_member["Daily Billable Capacity"] = df_team_member["Weekly Billable Capacity"] / 5
 
     return df_team_member
 
@@ -66,22 +72,28 @@ def create_dim_table():
 def create_weekly_fct_table(df_dim):
 
     # select the required columns from the Dim table
-    df_weekly = df_dim[["Name", "Role", "Weekly", "Freelancer", "Billable", "Hours", "Weekly Capacity", "Weekly Billable Capacity"]]
+    df_weekly = df_dim[["Name", "Role", "Weekly", "Freelancer", "Billable", "Hours", "Daily Capacity", "Daily Billable Capacity"]]
 
     # group by the target columns and aggregate the value columns
     df_weekly_grouped = df_weekly.groupby(["Weekly", "Name", "Role"]).agg(
                                                                             {
-                                                                                "Weekly Capacity": max,
-                                                                                "Weekly Billable Capacity": max,
+                                                                                "Daily Capacity": max,
+                                                                                "Daily Billable Capacity": max,
                                                                                 "Hours": sum
                                                                             }
                                                                         ).reset_index()
+    
+    df_weekly_grouped["Capacity"] = df_weekly_grouped["Daily Capacity"] * 5 # df_weekly_grouped["num_days"]
+    df_weekly_grouped["Billable Capacity"] = df_weekly_grouped["Daily Billable Capacity"] * 5 # df_weekly_grouped["num_days"]
+
+    df_fct_weekly_grouped = df_weekly_grouped[["Weekly", "Name", "Role", "Capacity", "Billable Capacity", "Hours"]]
+
     # rename the aggregate columns
-    df_weekly_grouped.columns = ["Weekly", "Name", "Role", "Capacity", "Billable Capacity", "Billable Hours"]
+    df_fct_weekly_grouped.columns = ["Weekly", "Name", "Role", "Capacity", "Billable Capacity", "Billable Hours"]
 
 
     # again group by the target columns that matches the fct table requirements and aggregate the rest
-    df_fct_weekly_grouped = df_weekly_grouped.groupby(["Weekly", "Role"]).agg(
+    df_fct_weekly_grouped = df_fct_weekly_grouped.groupby(["Weekly", "Role"]).agg(
                                                                                 {
                                                                                     "Capacity": sum,
                                                                                     "Billable Capacity": sum,
@@ -105,16 +117,21 @@ def create_weekly_fct_table(df_dim):
 def create_monthly_fct_table(df_dim):
 
     # select the required columns from the Dim table
-    df_monthly = df_dim[["Name", "Role", "Monthly", "Freelancer", "Billable", "Hours", "Weekly Capacity", "Weekly Billable Capacity"]]
+    df_monthly = df_dim[["Name", "Role", "Monthly", "Freelancer", "Billable", "Hours", "Daily Capacity", "Daily Billable Capacity"]]
 
     # group by the target columns and aggregate the value columns
     df_monthly_grouped = df_monthly.groupby(["Monthly", "Name", "Role"]).agg(
                                                                                 {
-                                                                                    "Weekly Capacity": max,
-                                                                                    "Weekly Billable Capacity": max,
+                                                                                    "Daily Capacity": max,
+                                                                                    "Daily Billable Capacity": max,
                                                                                     "Hours": sum
                                                                                 }
                                                                             ).reset_index()
+    
+    df_monthly_grouped["Capacity"] = df_monthly_grouped["Daily Capacity"] * 22 # df_weekly_grouped["num_days"]
+    df_monthly_grouped["Billable Capacity"] = df_monthly_grouped["Daily Billable Capacity"] * 22 # df_weekly_grouped["num_days"]
+
+    df_monthly_grouped = df_monthly_grouped[["Monthly", "Name", "Role", "Capacity", "Billable Capacity", "Hours"]]
     
     # rename the aggregate columns
     df_monthly_grouped.columns = ["Monthly", "Name", "Role", "Capacity", "Billable Capacity", "Billable Hours"]
@@ -183,7 +200,7 @@ def plot_graph(target_df, df_type):
         # plot graph
         df_for_graph.plot(
                             x="date_col", 
-                            y=["Capacity", "Billable Capacity", "Billable Hours"],
+                            y=["Billable Hours", "Billable Capacity", "Capacity"],
                             kind="barh", 
                             stacked=True,
                             title=output_file_name.replace("_", " - "),
@@ -192,7 +209,9 @@ def plot_graph(target_df, df_type):
                         )
         
         # save graph
-        plt.savefig(output_file, bbox_inches='tight')
+        fig = plt.gcf()
+        fig.set_size_inches((8.5, 11), forward=False)
+        fig.savefig(output_file, dpi=500, bbox_inches='tight')
 
 def create_report():
     fct_tables = create_fct_tables()
